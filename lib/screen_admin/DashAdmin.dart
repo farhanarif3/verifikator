@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'DailyOccupancyDetailPage.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class DashAdmin extends StatefulWidget {
   @override
@@ -33,7 +34,8 @@ class _DashAdminState extends State<DashAdmin> {
   }
 
   Future<void> _fetchSessionCount() async {
-    QuerySnapshot sessionSnapshot = await firestore.collection('sessions').get();
+    QuerySnapshot sessionSnapshot =
+        await firestore.collection('sessions').get();
     setState(() {
       sessionCount = sessionSnapshot.docs.length;
     });
@@ -62,7 +64,8 @@ class _DashAdminState extends State<DashAdmin> {
 
   void _changeMonth(int delta) {
     setState(() {
-      selectedMonth = DateTime(selectedMonth.year, selectedMonth.month + delta, 1);
+      selectedMonth =
+          DateTime(selectedMonth.year, selectedMonth.month + delta, 1);
     });
   }
 
@@ -116,28 +119,116 @@ class _DashAdminState extends State<DashAdmin> {
             child: selectedRoomId == null
                 ? Center(child: Text('Pilih ruangan untuk melihat data okupansi'))
                 : FutureBuilder<double>(
-                    future: _fetchMonthlyOccupancy(selectedRoomId!, selectedMonth),
+                    future:
+                        _fetchMonthlyOccupancy(selectedRoomId!, selectedMonth),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
                         return Center(child: CircularProgressIndicator());
                       }
 
                       var occupancy = snapshot.data!;
-                      return ListTile(
-                        title: Text('${DateFormat('MMMM yyyy').format(selectedMonth)}'),
-                        trailing: Text('${occupancy.toStringAsFixed(2)}%'),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => DailyOccupancyDetailPage(
-                                roomId: selectedRoomId!,
-                                month: selectedMonth,
-                                sessionCount: sessionCount,
+                      var vacant = 100 - occupancy;
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AspectRatio(
+                            aspectRatio: 1.3,
+                            child: PieChart(
+                              PieChartData(
+                                sections: [
+                                  PieChartSectionData(
+                                    color: Colors.green,
+                                    value: occupancy,
+                                    title: '',
+                                    radius: 60,
+                                    titleStyle: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  PieChartSectionData(
+                                    color: Colors.red,
+                                    value: vacant,
+                                    title: '',
+                                    radius: 60,
+                                    titleStyle: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                                centerSpaceRadius: 50,
+                                sectionsSpace: 2,
                               ),
                             ),
-                          );
-                        },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                Column(
+                                  children: [
+                                    Text(
+                                      'Dipinjam',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${occupancy.toStringAsFixed(1)}%',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  children: [
+                                    Text(
+                                      'Tidak di pinjam',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${vacant.toStringAsFixed(1)}%',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          ListTile(
+                            title: Text(
+                                '${DateFormat('MMMM yyyy').format(selectedMonth)}'),
+                            trailing: Text('${occupancy.toStringAsFixed(2)}%'),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      DailyOccupancyDetailPage(
+                                    roomId: selectedRoomId!,
+                                    month: selectedMonth,
+                                    sessionCount: sessionCount,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       );
                     },
                   ),

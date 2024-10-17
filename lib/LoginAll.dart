@@ -58,9 +58,6 @@ class _LoginFormState extends State<LoginForm> {
     });
 
     try {
-      print("Email: ${_emailController.text}");
-      print("Password: ${_passwordController.text}");
-
       UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text,
         password: _passwordController.text,
@@ -76,32 +73,25 @@ class _LoginFormState extends State<LoginForm> {
 
         if (userDoc.exists) {
           String userRole = userDoc['role'];
-          
-          switch (userRole) {
-            case 'Admin':
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => HomeAdmin()),
-              );
-              break;
-            case 'Verifikator':
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => VerifPage()),
-              );
-              break;
-            case 'User':
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => HomeUser()),
-              );
-              break;
-            default:
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Unknown user role')),
-              );
-              break;
-          }
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) {
+                switch (userRole) {
+                  case 'Admin':
+                    return HomeAdmin();
+                  case 'Verifikator':
+                    return VerifPage();
+                  case 'User':
+                    return HomeUser();
+                  default:
+                    return Scaffold(
+                      body: Center(child: Text('Unknown user role')),
+                    );
+                }
+              },
+            ),
+          );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('User data not found')),
@@ -113,35 +103,37 @@ class _LoginFormState extends State<LoginForm> {
         );
       }
     } catch (e) {
-      print("Login error: $e");
+      String errorMessage = 'Error occurred';
       if (e is FirebaseAuthException) {
-        String errorMessage;
-        if (e.code == 'wrong-password') {
-          errorMessage = 'Password yang Anda masukkan salah';
-        } else if (e.code == 'user-not-found') {
-          errorMessage = 'Email belum terdaftar';
-        } else {
-          errorMessage = 'Email atau password yang Anda masukkan salah';
+        switch (e.code) {
+          case 'wrong-password':
+            errorMessage = 'Password yang Anda masukkan salah';
+            break;
+          case 'user-not-found':
+            errorMessage = 'Email belum terdaftar';
+            break;
+          default:
+            errorMessage = 'Email atau password yang Anda masukkan salah';
         }
-
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text('Error'),
-              content: Text(errorMessage),
-              actions: <Widget>[
-                TextButton(
-                  child: Text('OK'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            );
-          },
-        );
       }
+
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Error'),
+            content: Text(errorMessage),
+            actions: <Widget>[
+              TextButton(
+                child: Text('OK'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
     }
 
     setState(() {

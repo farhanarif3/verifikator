@@ -93,20 +93,32 @@ class _HomeUserState extends State<HomeUser> {
                       Text('Ganti Password:',
                           style: TextStyle(fontWeight: FontWeight.bold)),
                       TextFormField(
-                        controller: _passwordController,
-                        decoration: InputDecoration(
-                          labelText: 'Password Baru',
-                          suffixIcon: IconButton(
-                            icon: Icon(Icons.visibility),
-                            onPressed: () {
-                              setState(() {
-                                _passwordController.clear();
-                              });
-                            },
-                          ),
-                        ),
-                        obscureText: true,
-                      ),
+  controller: _passwordController,
+  decoration: InputDecoration(
+    labelText: 'Password Baru',
+    suffixIcon: IconButton(
+      icon: Icon(Icons.visibility),
+      onPressed: () {
+        setState(() {
+          _passwordController.clear();
+        });
+      },
+    ),
+  ),
+  obscureText: true,
+  validator: (value) {
+    // Regex pattern to check the password criteria
+    RegExp regex = RegExp(r'^(?=.*?[A-Z])(?=.*?[0-9])(?=.*?[!@#\$&*~]).{8,}$');
+    
+    if (value == null || value.isEmpty) {
+      return 'Password tidak boleh kosong';
+    } else if (!regex.hasMatch(value)) {
+      return 'Password harus minimal 8 karakter dan mengandung huruf kapital, angka, dan simbol';
+    }
+    return null;
+  },
+),
+
                       TextFormField(
                         controller: _confirmPasswordController,
                         decoration: InputDecoration(

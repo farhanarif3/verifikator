@@ -188,6 +188,7 @@ class _DataTempatState extends State<DataTempat> {
                             ),
                             Text('Lokasi: ${room['location']}'),
                             Text('Detail Lokasi: ${room['location_detail']}'),
+                            Text('Bidang: ${room['bidang']}'),
                             SizedBox(height: 8),
                             Text('Kapasitas: ${room['capacity']}'),
                             Text('Luas: ${room['area']} m²'),
@@ -342,6 +343,7 @@ class _DataTempatState extends State<DataTempat> {
                             'username': userName,
                             'room': room.id,
                             'room_name': room['room_name'], // Menambahkan nama ruangan yang dipinjam
+                            'room_bidang': room['bidang'], // Menambahkan nama ruangan yang dipinjam
                             'reason': reason,
                             'booking_date': selectedDate,
                             'session': selectedSessionCode,

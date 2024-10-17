@@ -132,13 +132,7 @@ class _DailyOccupancyDetailPageState extends State<DailyOccupancyDetailPage> {
 
           return Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: ElevatedButton(
-                  onPressed: _generateReport,
-                  child: Text('Generate Report'),
-                ),
-              ),
+              
               Expanded(
                 child: ListView.builder(
                   itemCount: totalDays,

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
@@ -33,6 +34,7 @@ class _TambahDataRuangState extends State<TambahDataRuang> {
   String? _selectedBidang;
 
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   int _currentIndex = 0;
 
@@ -43,6 +45,24 @@ class _TambahDataRuangState extends State<TambahDataRuang> {
     _fetchBidang();
   }
 
+  Future<void> _getUserBidang() async {
+  try {
+    User? user = _auth.currentUser;
+    if (user != null) {
+      DocumentSnapshot userSnapshot =
+          await firestore.collection('users').doc(user.uid).get();
+      if (userSnapshot.exists) {
+        setState(() {
+          _selectedBidang = userSnapshot['bidang'];
+        });
+      } else {
+        throw 'Dokumen pengguna tidak ditemukan';
+      }
+    }
+  } catch (e) {
+    print('Error fetching user bidang: $e');
+  }
+}
   Future<void> _fetchLocations() async {
     try {
       final snapshot = await firestore.collection('locations').get();
@@ -58,19 +78,31 @@ class _TambahDataRuangState extends State<TambahDataRuang> {
     }
   }
   Future<void> _fetchBidang() async {
-    try {
-      final snapshot = await firestore.collection('bidang').get();
-      final bidang = snapshot.docs.map((doc) => doc['name'] as String).toList();
-      setState(() {
-        _bidang = bidang;
-        if (_bidang.isNotEmpty) {
-          _selectedBidang = _bidang.first;
-        }
-      });
-    } catch (e) {
-      print('Error fetching locations: $e');
+  try {
+    // Ambil bidang pengguna saat ini
+    User? user = _auth.currentUser;
+    if (user != null) {
+      DocumentSnapshot userSnapshot = await firestore.collection('users').doc(user.uid).get();
+      if (userSnapshot.exists) {
+        String userBidang = userSnapshot['bidang'];
+
+        // Ambil bidang yang sama dengan bidang pengguna
+        final snapshot = await firestore.collection('bidang').where('name', isEqualTo: userBidang).get();
+        final bidang = snapshot.docs.map((doc) => doc['name'] as String).toList();
+        setState(() {
+          _bidang = bidang;
+          if (_bidang.isNotEmpty) {
+            _selectedBidang = _bidang.first;
+          }
+        });
+      } else {
+        throw 'Dokumen pengguna tidak ditemukan';
+      }
     }
+  } catch (e) {
+    print('Error fetching bidang: $e');
   }
+}
 
   Future<void> _addRoom() async {
   try {
@@ -302,16 +334,15 @@ class _TambahDataRuangState extends State<TambahDataRuang> {
                 labelText: 'Detail Lokasi',
               ),
             ),
-            SizedBox(height: 16.0),
             DropdownButtonFormField<String>(
   value: _selectedBidang,
   decoration: InputDecoration(
     labelText: 'Bidang',
   ),
-  items: _bidang.map((bidang) {
+  items: [_selectedBidang].map((bidang) {
     return DropdownMenuItem<String>(
       value: bidang,
-      child: Text(bidang),
+      child: Text(bidang ?? ''),
     );
   }).toList(),
   onChanged: (newValue) {
@@ -320,6 +351,7 @@ class _TambahDataRuangState extends State<TambahDataRuang> {
     });
   },
 ),
+
 
             TextButton.icon(
               onPressed: _pickImages,

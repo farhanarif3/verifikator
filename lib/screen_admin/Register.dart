@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'manage_bidang_page.dart'; // Ganti dengan path yang benar
+import 'account_management_page.dart';
 
 class Register extends StatefulWidget {
   @override
@@ -70,7 +71,7 @@ class _RegisterState extends State<Register> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => ManageBidangPage()),
+                MaterialPageRoute(builder: (context) => AccountManagementPage()),
               );
             },
           ),
@@ -215,7 +216,21 @@ class _RegisterState extends State<Register> {
                           email: emailController.text,
                           password: passwordController.text,
                         ).then((userCredential) {
-                          // Save additional user data to Firestore or other operations
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(userCredential.user!.uid)
+                              .set({
+                            'username': usernameController.text,
+                            'email': emailController.text,
+                            'phone': phoneController.text,
+                            'role': role,
+                            'bidang': bidang,
+                          }).then((_) {
+                            setState(() {
+                              showProgress = false;
+                            });
+                            _showSuccessDialog();
+                          });
                         }).catchError((e) {
                           print(e.toString());
                           setState(() {
@@ -289,10 +304,10 @@ class _RegisterState extends State<Register> {
               labelText: title,
               border: OutlineInputBorder(),
             ),
-            items: items.map((String item) {
+            items: items.map((String dropDownStringItem) {
               return DropdownMenuItem<String>(
-                value: item,
-                child: Text(item),
+                value: dropDownStringItem,
+                child: Text(dropDownStringItem),
               );
             }).toList(),
             onChanged: onChanged,
@@ -300,5 +315,25 @@ class _RegisterState extends State<Register> {
         ),
       ],
     );
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+  builder: (BuildContext context) {
+    return AlertDialog(
+      title: Text('Registrasi Berhasil'),
+      content: Text('Anda telah berhasil mendaftar!'),
+      actions: <Widget>[
+        TextButton(
+          child: Text('OK'),
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+        ),
+      ],
+    );
+  },
+);
   }
 }

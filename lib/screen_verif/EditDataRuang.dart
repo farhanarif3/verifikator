@@ -1,10 +1,13 @@
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+
+
 
 void main() {
   runApp(MaterialApp(
@@ -55,6 +58,8 @@ class _EditDataRuangState extends State<EditDataRuang> {
   List<String> _imageUrls = [];
   List<Facility> _facilities = [];
 
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final PageController _pageController = PageController();
 
@@ -71,6 +76,25 @@ class _EditDataRuangState extends State<EditDataRuang> {
     _pageController.dispose();
     super.dispose();
   }
+
+  Future<void> _getUserBidang() async {
+  try {
+    User? user = _auth.currentUser;
+    if (user != null) {
+      DocumentSnapshot userSnapshot =
+          await firestore.collection('users').doc(user.uid).get();
+      if (userSnapshot.exists) {
+        setState(() {
+          _selectedBidang = userSnapshot['bidang'];
+        });
+      } else {
+        throw 'Dokumen pengguna tidak ditemukan';
+      }
+    }
+  } catch (e) {
+    print('Error fetching user bidang: $e');
+  }
+}
 
   void _loadRoomData() async {
     try {
@@ -296,24 +320,24 @@ class _EditDataRuangState extends State<EditDataRuang> {
 
             SizedBox(height: 16.0),
 
-            // Dropdown untuk Lokasi
             DropdownButtonFormField<String>(
-              value: _selectedBidang,
-              decoration: InputDecoration(
-                labelText: 'Bidang',
-              ),
-              items: _bidang.map((bidang) {
-                return DropdownMenuItem<String>(
-                  value: bidang,
-                  child: Text(bidang),
-                );
-              }).toList(),
-              onChanged: (newValue) {
-                setState(() {
-                  _selectedBidang = newValue;
-                });
-              },
-            ),
+  value: _selectedBidang,
+  decoration: InputDecoration(
+    labelText: 'Bidang',
+  ),
+  items: [_selectedBidang].map((bidang) {
+    return DropdownMenuItem<String>(
+      value: bidang,
+      child: Text(bidang ?? ''),
+    );
+  }).toList(),
+  onChanged: (newValue) {
+    setState(() {
+      _selectedBidang = newValue;
+    });
+  },
+),
+
 
             // Pilih Gambar
             ElevatedButton(

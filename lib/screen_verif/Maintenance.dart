@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,30 +19,45 @@ class _AgendaState extends State<Agenda> {
 
   Future<void> fetchRooms() async {
     try {
-      QuerySnapshot querySnapshot =
-          await FirebaseFirestore.instance.collection('rooms').get();
+      // Ambil bidang pengguna saat ini
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        DocumentSnapshot userSnapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (userSnapshot.exists) {
+          String userBidang = userSnapshot['bidang'];
 
-      List<String> rooms = [];
-      for (var doc in querySnapshot.docs) {
-        String roomName = doc['room_name'];
-        rooms.add(roomName);
-      }
+          // Ambil ruang yang bidangnya sesuai dengan bidang pengguna
+          QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+              .collection('rooms')
+              .where('bidang', isEqualTo: userBidang)
+              .get();
 
-      setState(() {
-        roomNames = rooms;
-        selectedRoom = roomNames.isNotEmpty ? roomNames.first : null;
-        if (selectedRoom != null) {
-          _fetchReservationsStream(selectedRoom!).listen((event) {
-            setState(() {
-              _acceptedBookings = event;
-            });
+          List<String> rooms = [];
+          for (var doc in querySnapshot.docs) {
+            String roomName = doc['room_name'];
+            rooms.add(roomName);
+          }
+
+          setState(() {
+            roomNames = rooms;
+            selectedRoom = roomNames.isNotEmpty ? roomNames.first : null;
+            if (selectedRoom != null) {
+              _fetchReservationsStream(selectedRoom!).listen((event) {
+                setState(() {
+                  _acceptedBookings = event;
+                });
+              });
+            }
           });
+        } else {
+          throw 'Dokumen pengguna tidak ditemukan';
         }
-      });
+      }
     } catch (e) {
       print('Error fetching rooms: $e');
     }
   }
+
 
   Stream<Map<DateTime, List<dynamic>>> _fetchReservationsStream(String room) {
     return FirebaseFirestore.instance

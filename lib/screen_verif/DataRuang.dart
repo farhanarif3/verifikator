@@ -7,9 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:image_picker/image_picker.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import 'package:ta/screen_admin/EditDataRuang.dart';
-import 'package:ta/screen_admin/EditSesi.dart';
-import 'package:ta/screen_admin/TambahDataRuang.dart';
+import 'package:ta/screen_verif/EditDataRuang.dart';
+import 'package:ta/screen_verif/TambahDataRuang.dart';
 
 void main() {
   runApp(MaterialApp(
@@ -34,9 +33,29 @@ class _DataRuangState extends State<DataRuang> {
   List<Facility> _facilities = [];
   DocumentSnapshot? _selectedRoom;
   String _searchQuery = '';
+  String? userBidang;
 
-  
-  
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentUserBidang();
+  }
+
+  Future<void> _getCurrentUserBidang() async {
+    try {
+      final User? user = _auth.currentUser;
+      if (user != null) {
+        final DocumentSnapshot userDoc =
+            await firestore.collection('users').doc(user.uid).get();
+        setState(() {
+          userBidang = userDoc['bidang'];
+        });
+      }
+    } catch (e) {
+      print('Error fetching user bidang: $e');
+    }
+  }
+
   void _addRoom() async {
     try {
       List<String> imageUrls = [];
@@ -269,19 +288,14 @@ class _DataRuangState extends State<DataRuang> {
               ),
             ),
           ),
-          IconButton(
-  icon: Icon(Icons.settings),
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => SettingsPage()),
-    );
-  },
-),
+          
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: firestore.collection('rooms').orderBy('room_name').snapshots(),
+        stream: firestore.collection('rooms')
+        .where('bidang', isEqualTo: userBidang)
+        .orderBy('room_name')
+        .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return Center(child: CircularProgressIndicator());

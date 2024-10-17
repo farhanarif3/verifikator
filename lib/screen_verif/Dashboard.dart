@@ -1,390 +1,343 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
-import 'package:excel/excel.dart';
-import 'package:permission_handler/permission_handler.dart';
 
-class DashAdmin extends StatefulWidget {
-  @override
-  _DashAdminState createState() => _DashAdminState();
-}
-
-class _DashAdminState extends State<DashAdmin> {
+class Dashboard extends StatelessWidget {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
-  String? selectedRoomId;
-  List<QueryDocumentSnapshot> rooms = [];
-  int sessionCount = 0;
-  DateTime selectedMonth = DateTime.now();
+  final String userBidang;
+
+  // Constructor with userBidang
+  Dashboard({required this.userBidang});
 
   @override
-  void initState() {
-    super.initState();
-    _fetchRooms();
-    _fetchSessionCount();
-  }
-
-  Future<void> _fetchRooms() async {
-    QuerySnapshot roomSnapshot = await firestore.collection('rooms').get();
-    setState(() {
-      rooms = roomSnapshot.docs;
-      if (rooms.isNotEmpty) {
-        selectedRoomId = rooms.first.id;
-      }
-    });
-  }
-
-  Future<void> _fetchSessionCount() async {
-    QuerySnapshot sessionSnapshot = await firestore.collection('sessions').get();
-    setState(() {
-      sessionCount = sessionSnapshot.docs.length;
-    });
-  }
-
-  Future<double> _fetchMonthlyOccupancy(String roomId, DateTime month) async {
-    int totalDays = DateTime(month.year, month.month + 1, 0).day;
-    int totalSessions = totalDays * sessionCount;
-    int bookedSessions = 0;
-
-    QuerySnapshot bookingSnapshot = await firestore
-        .collection('bookings')
-        .where('room', isEqualTo: roomId)
-        .where('status', isEqualTo: 'Accepted')
-        .get();
-
-    for (var doc in bookingSnapshot.docs) {
-      var bookingDate = (doc['booking_date'] as Timestamp).toDate();
-      if (bookingDate.year == month.year && bookingDate.month == month.month) {
-        bookedSessions++;
-      }
-    }
-
-    return (bookedSessions / totalSessions) * 100;
-  }
-
-  void _changeMonth(int delta) {
-    setState(() {
-      selectedMonth = DateTime(selectedMonth.year, selectedMonth.month + delta, 1);
-    });
-  }
-
-  Future<void> _requestPermissions() async {
-    var status = await Permission.storage.status;
-    if (!status.isGranted) {
-      await Permission.storage.request();
-    }
-  }
-
-  Future<void> _generateDailyReport() async {
-    if (selectedRoomId != null) {
-      await _requestPermissions();
-
-      try {
-        var dailyOccupancy = await _fetchDailyOccupancy();
-
-        var excel = Excel.createExcel();
-        Sheet sheet = excel['Daily Occupancy Report'];
-
-        // Add header row
-        sheet.cell(CellIndex.indexByString('A1')).value = TextCellValue('Date');
-        sheet.cell(CellIndex.indexByString('B1')).value = TextCellValue('Occupancy (%)');
-
-        // Add data rows
-        int rowIndex = 2; // Start from row 2 to leave row 1 for headers
-        dailyOccupancy.forEach((date, occupancy) {
-          sheet.cell(CellIndex.indexByString('A$rowIndex')).value = TextCellValue(date);
-          sheet.cell(CellIndex.indexByString('B$rowIndex')).value = DoubleCellValue(occupancy);
-          rowIndex++;
-        });
-
-        // Save the file
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/DailyOccupancyReport_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx');
-        await file.writeAsBytes(await excel.encode()!);
-
-        // Notify user
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Laporan okupansi harian berhasil diunduh. File disimpan di: ${file.path}')),
-        );
-      } catch (e) {
-        // Handle errors appropriately
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengunduh laporan: $e')),
-        );
-      }
-    }
-  }
-
-  Future<Map<String, double>> _fetchDailyOccupancy() async {
-    Map<String, double> dailyOccupancy = {};
-    QuerySnapshot bookingSnapshot = await firestore
-        .collection('bookings')
-        .where('room', isEqualTo: selectedRoomId)
-        .where('status', isEqualTo: 'Accepted')
-        .get();
-
-    for (var doc in bookingSnapshot.docs) {
-      var bookingDate = (doc['booking_date'] as Timestamp).toDate();
-      if (bookingDate.year == selectedMonth.year && bookingDate.month == selectedMonth.month) {
-        var dateKey = DateFormat('yyyy-MM-dd').format(bookingDate);
-        dailyOccupancy[dateKey] = 100.0; // Assuming 100% occupancy for each booking
-      }
-    }
-
-    return dailyOccupancy;
-  }
-
-  void _generateMonthlyReport() async {
-    if (selectedRoomId != null) {
-      double occupancy = await _fetchMonthlyOccupancy(selectedRoomId!, selectedMonth);
-
-      // Generate the report (this is a placeholder implementation)
-      final reportData = '''
-      Report for ${DateFormat('MMMM yyyy').format(selectedMonth)}
-      Room: ${rooms.firstWhere((room) => room.id == selectedRoomId!)['room_name']}
-      Occupancy: ${occupancy.toStringAsFixed(2)}%
-      ''';
-
-      // For demonstration, we just show the report in a dialog
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('Generated Report'),
-            content: SingleChildScrollView(
-              child: Text(reportData),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text('Close'),
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        body: Column(
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              color: Colors.white,
+              child: TabBar(
+                indicatorColor: Colors.blue,
+                labelColor: Colors.blue,
+                unselectedLabelColor: Colors.grey,
+                tabs: [
+                  _buildTabWithCounter('Request', 'bookings', status: 'Request'),
+                  _buildTabWithCounter('Approved', 'bookings', status: 'Accepted'),
+                  _buildTabWithCounter('Rejected', 'bookings', status: 'Rejected'),
+                  _buildTabWithCounter('Cancelled', 'bookings', status: 'Cancelled'),
+                ],
               ),
-            ],
-          );
-        },
-      );
-    }
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildBookingsTab(status: 'Request'),
+                  _buildApprovedTab(),
+                  _buildRejectedTab(),
+                  _buildCancelledTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Data Okupansi Booking'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: DropdownButtonFormField<String>(
-              decoration: InputDecoration(labelText: 'Pilih Ruangan'),
-              value: selectedRoomId,
-              items: rooms.map((room) {
-                return DropdownMenuItem<String>(
-                  child: Text(room['room_name']),
-                  value: room.id,
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedRoomId = value;
-                });
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_left),
-                  onPressed: () => _changeMonth(-1),
-                ),
-                Text(
-                  DateFormat('MMMM yyyy').format(selectedMonth),
-                  style: TextStyle(fontSize: 16),
-                ),
-                IconButton(
-                  icon: Icon(Icons.arrow_right),
-                  onPressed: () => _changeMonth(1),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton(
-              onPressed: _generateMonthlyReport,
-              child: Text('Generate Monthly Report'),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton(
-              onPressed: _generateDailyReport,
-              child: Text('Generate Daily Report'),
-            ),
-          ),
-          Expanded(
-            child: selectedRoomId == null
-                ? Center(child: Text('Pilih ruangan untuk melihat data okupansi'))
-                : FutureBuilder<double>(
-                    future: _fetchMonthlyOccupancy(selectedRoomId!, selectedMonth),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return Center(child: CircularProgressIndicator());
-                      }
+  Widget _buildTabWithCounter(String title, String collection, {String? status}) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: status != null
+          ? firestore.collection(collection).where('status', isEqualTo: status).where('room_bidang', isEqualTo: userBidang).snapshots()
+          : firestore.collection(collection).where('room_bidang', isEqualTo: userBidang).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Tab(child: Text(title));
+        }
+        if (snapshot.hasError) {
+          return Tab(child: Text('$title (Error)'));
+        }
 
-                      var occupancy = snapshot.data!;
-                      return ListTile(
-                        title: Text('${DateFormat('MMMM yyyy').format(selectedMonth)}'),
-                        trailing: Text('${occupancy.toStringAsFixed(2)}%'),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => DailyOccupancyDetailPage(
-                                roomId: selectedRoomId!,
-                                month: selectedMonth,
-                                sessionCount: sessionCount,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
+        int count = snapshot.data?.docs.length ?? 0;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Stack(
+            children: [
+              Tab(
+                child: Text(title),
+              ),
+              if (count > 0)
+                Positioned(
+                  right: 0,
+                  top: 0, // Adjust this value to move the badge downwards
+                  child: Container(
+                    padding: EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: BoxConstraints(minWidth: 20, minHeight: 20),
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
+                ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
-}
 
-class DailyOccupancyDetailPage extends StatelessWidget {
-  final String roomId;
-  final DateTime month;
-  final int sessionCount;
+  Widget _buildBookingsTab({String? status}) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: firestore.collection('bookings').where('status', isEqualTo: status).where('room_bidang', isEqualTo: userBidang).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(child: Text('No booking data available.'));
+        }
 
-  const DailyOccupancyDetailPage({
-    Key? key,
-    required this.roomId,
-    required this.month,
-    required this.sessionCount,
-  }) : super(key: key);
+        var bookings = snapshot.data!.docs;
 
-  Future<Map<String, double>> _fetchDailyOccupancy() async {
-    Map<String, double> dailyOccupancy = {};
-    QuerySnapshot bookingSnapshot = await FirebaseFirestore.instance
-        .collection('bookings')
-        .where('room', isEqualTo: roomId)
-        .where('status', isEqualTo: 'Accepted')
-        .get();
+        return SingleChildScrollView(
+          child: Column(
+            children: bookings.map((booking) {
+              String status = booking['status'];
+              DateTime bookingDate = (booking['booking_date'] as Timestamp).toDate();
 
-    for (var doc in bookingSnapshot.docs) {
-      var bookingDate = (doc['booking_date'] as Timestamp).toDate();
-      if (bookingDate.year == month.year && bookingDate.month == month.month) {
-        var dateKey = DateFormat('yyyy-MM-dd').format(bookingDate);
-        dailyOccupancy[dateKey] = 100.0; // Assuming 100% occupancy for each booking
-      }
-    }
-
-    return dailyOccupancy;
-  }
-
-  Future<void> _generateDailyReport(BuildContext context) async {
-    await _requestPermissions();
-
-    try {
-      var dailyOccupancy = await _fetchDailyOccupancy();
-
-      var excel = Excel.createExcel();
-      Sheet sheet = excel['Daily Occupancy Report'];
-
-      // Add header row
-      sheet.cell(CellIndex.indexByString('A1')).value = TextCellValue('Date');
-      sheet.cell(CellIndex.indexByString('B1')).value = TextCellValue('Occupancy (%)');
-
-      // Add data rows
-      int rowIndex = 2; // Start from row 2 to leave row 1 for headers
-      dailyOccupancy.forEach((date, occupancy) {
-        sheet.cell(CellIndex.indexByString('A$rowIndex')).value = TextCellValue(date);
-        sheet.cell(CellIndex.indexByString('B$rowIndex')).value = DoubleCellValue(occupancy);
-        rowIndex++;
-      });
-
-      // Save the file
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/DailyOccupancyReport_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx');
-      await file.writeAsBytes(await excel.encode()!);
-
-      // Notify user
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Laporan okupansi harian berhasil diunduh. File disimpan di: ${file.path}')),
-      );
-    } catch (e) {
-      // Handle errors appropriately
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengunduh laporan: $e')),
-      );
-    }
-  }
-
-  Future<void> _requestPermissions() async {
-    var status = await Permission.storage.status;
-    if (!status.isGranted) {
-      await Permission.storage.request();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Detail Okupansi Harian'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton(
-              onPressed: () => _generateDailyReport(context),
-              child: Text('Generate Daily Report'),
-            ),
-          ),
-          Expanded(
-            child: FutureBuilder<Map<String, double>>(
-              future: _fetchDailyOccupancy(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return Center(child: CircularProgressIndicator());
-                }
-
-                var dailyOccupancy = snapshot.data!;
-                int totalDays = DateTime(month.year, month.month + 1, 0).day;
-
-                return ListView.builder(
-                  itemCount: totalDays,
-                  itemBuilder: (context, index) {
-                    var date = DateTime(month.year, month.month, index + 1);
-                    var dateKey = DateFormat('yyyy-MM-dd').format(date);
-                    var occupancy = dailyOccupancy[dateKey] ?? 0.0;
-
-                    return ListTile(
-                      title: Text(DateFormat('yyyy-MM-dd').format(date)),
-                      trailing: Text('${occupancy.toStringAsFixed(2)}%'),
-                    );
-                  },
+              if (status != 'Accepted' && status != 'Rejected' && status != 'Cancelled') {
+                return Card(
+                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ListTile(
+                    title: Text('Ruangan: ${booking['room_name']}'),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bidang: ${booking['bidang']}'),
+                        Text('Phone: ${booking['phone']}'),
+                        Text('Date: ${bookingDate.day}/${bookingDate.month}/${bookingDate.year}'),
+                        Text('Sesi: ${booking['session']}'),
+                        Text('Keperluan: ${booking['reason']}'),
+                      ],
+                    ),
+                    trailing: Wrap(
+                      spacing: 12,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () => _showConfirmationDialog(context, booking, true),
+                          child: Text('Accept'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => _showConfirmationDialog(context, booking, false),
+                          child: Text('Reject'),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
-              },
-            ),
+              } else {
+                return SizedBox.shrink();
+              }
+            }).toList(),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
+
+  Widget _buildApprovedTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: firestore.collection('bookings').where('status', isEqualTo: 'Accepted').where('room_bidang', isEqualTo: userBidang).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(child: Text('No approved bookings available.'));
+        }
+
+        var bookings = snapshot.data!.docs;
+
+        return SingleChildScrollView(
+          child: Column(
+            children: bookings.map((booking) {
+              DateTime bookingDate = (booking['booking_date'] as Timestamp).toDate();
+
+              return Card(
+                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ListTile(
+                  title: Text('Room: ${booking['room_name']}'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Bidang: ${booking['bidang']}'),
+                      Text('Phone: ${booking['phone']}'),
+                      Text('Date: ${bookingDate.day}/${bookingDate.month}/${bookingDate.year}'),
+                      Text('Sesi: ${booking['session']}'),
+                      Text('Keperluan: ${booking['reason']}'),
+                    ],
+                  ),
+                  trailing: Icon(Icons.check_circle, color: Colors.green),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+ Widget _buildRejectedTab() {
+  return StreamBuilder<QuerySnapshot>(
+    stream: firestore.collection('bookings')
+        .where('status', isEqualTo: 'Rejected')
+        .where('room_bidang', isEqualTo: userBidang)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError) {
+        return Center(child: Text('Error: ${snapshot.error}'));
+      }
+      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        return Center(child: Text('No rejected bookings available.'));
+      }
+
+      var bookings = snapshot.data!.docs;
+
+      return SingleChildScrollView(
+        child: Column(
+          children: bookings.map((booking) {
+            DateTime bookingDate = (booking['booking_date'] as Timestamp).toDate();
+            // Cast the document data to Map<String, dynamic>
+            Map<String, dynamic> bookingData = booking.data() as Map<String, dynamic>;
+
+            // Handle rejection reason safely
+            String rejectionReason = bookingData.containsKey('rejection_reason')
+                ? bookingData['rejection_reason']
+                : 'No reason provided';
+
+            return Card(
+              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListTile(
+                title: Text('Room: ${bookingData['room_name']}'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Bidang: ${bookingData['bidang']}'),
+                    Text('Phone: ${bookingData['phone']}'),
+                    Text('Date: ${bookingDate.day}/${bookingDate.month}/${bookingDate.year}'),
+                    Text('Sesi: ${bookingData['session']}'),
+                    Text('Keperluan: ${bookingData['reason']}'),
+                    Text('Rejection Reason: $rejectionReason'),
+                  ],
+                ),
+                trailing: Icon(Icons.cancel, color: Colors.red),
+              ),
+            );
+          }).toList(),
+        ),
+      );
+    },
+  );
 }
+
+
+
+  Widget _buildCancelledTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: firestore.collection('bookings').where('status', isEqualTo: 'Cancelled').where('room_bidang', isEqualTo: userBidang).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+                if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(child: Text('No cancelled bookings available.'));
+        }
+
+        var bookings = snapshot.data!.docs;
+
+        return SingleChildScrollView(
+          child: Column(
+            children: bookings.map((booking) {
+              DateTime bookingDate = (booking['booking_date'] as Timestamp).toDate();
+
+              return Card(
+                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ListTile(
+                  title: Text('Room: ${booking['room_name']}'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Bidang: ${booking['bidang']}'),
+                      Text('Phone: ${booking['phone']}'),
+                      Text('Date: ${bookingDate.day}/${bookingDate.month}/${bookingDate.year}'),
+                      Text('Sesi: ${booking['session']}'),
+                      Text('Keperluan: ${booking['reason']}'),
+                    ],
+                  ),
+                  trailing: Icon(Icons.cancel, color: Colors.grey),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showConfirmationDialog(BuildContext context, DocumentSnapshot booking, bool isAccept) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(isAccept ? 'Accept Booking' : 'Reject Booking'),
+          content: Text('Are you sure you want to ${isAccept ? 'accept' : 'reject'} this booking?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                _updateBookingStatus(booking.id, isAccept ? 'Accepted' : 'Rejected');
+                Navigator.of(context).pop();
+              },
+              child: Text(isAccept ? 'Accept' : 'Reject'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _updateBookingStatus(String bookingId, String status) {
+    firestore.collection('bookings').doc(bookingId).update({'status': status});
+  }
+}
+
+         

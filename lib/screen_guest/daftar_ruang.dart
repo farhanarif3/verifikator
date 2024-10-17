@@ -161,6 +161,7 @@ class _daftar_ruangState extends State<daftar_ruang> {
                             ),
                             Text('Lokasi: ${room['location']}'),
                             Text('Detail Lokasi: ${room['location_detail']}'),
+                            Text('Bidang: ${room['bidang']}'),
                             SizedBox(height: 8),
                             Text('Kapasitas: ${room['capacity']}'),
                             Text('Luas: ${room['area']} m²'),

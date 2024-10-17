@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // Tambahkan ini untuk format tanggal
+import 'package:intl/intl.dart';
 
 class Dashboard extends StatelessWidget {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -44,7 +44,11 @@ class Dashboard extends StatelessWidget {
                     return Center(child: Text('Data pengguna tidak ditemukan.'));
                   }
 
-                  var userData = userDocSnapshot.data!.data() as Map<String, dynamic>;
+                  var userData = userDocSnapshot.data!.data() as Map<String, dynamic>?;
+                  if (userData == null || !userData.containsKey('bidang')) {
+                    return Center(child: Text('Bidang pengguna tidak ditemukan.'));
+                  }
+
                   String userField = userData['bidang'];
 
                   return TabBarView(
@@ -68,11 +72,10 @@ class Dashboard extends StatelessWidget {
 
   Widget _buildBookingList(BuildContext context, String userField, String status) {
     return StreamBuilder<QuerySnapshot>(
-      stream: status == 'Request'
-          ? firestore.collection('bookings').where('bidang', isEqualTo: userField).where('status', isEqualTo: 'Request').snapshots()
-          : status == 'Cancelled'
-              ? firestore.collection('bookings').where('bidang', isEqualTo: userField).where('status', isEqualTo: 'Cancelled').snapshots()
-              : firestore.collection('bookings').where('bidang', isEqualTo: userField).where('status', isEqualTo: status).snapshots(),
+      stream: firestore.collection('bookings')
+          .where('bidang', isEqualTo: userField)
+          .where('status', isEqualTo: status)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator());
@@ -96,7 +99,7 @@ class Dashboard extends StatelessWidget {
         return ListView.builder(
           itemCount: bookings.length,
           itemBuilder: (context, index) {
-            var booking = bookings[index];
+            var booking = bookings[index].data() as Map<String, dynamic>;
             return Card(
               margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               elevation: 3,
@@ -109,20 +112,20 @@ class Dashboard extends StatelessWidget {
                     SizedBox(height: 8),
                     Text('Tujuan Meminjam: ${booking['reason']}'),
                     SizedBox(height: 8),
-                    Text('Tanggal Pemesanan: ${dateFormat.format(booking['booking_date'].toDate())}'), // Format tanggal
+                    Text('Tanggal Pemesanan: ${dateFormat.format((booking['booking_date'] as Timestamp).toDate())}'), // Format tanggal
                     Text('Sesi: ${booking['session']}'),
                     SizedBox(height: 8),
                     Text('Status: ${booking['status']}'),
                     if (status == 'Request' || status == 'Accepted')
                       ElevatedButton(
                         onPressed: () {
-                          _showCancelDialog(context, booking.reference);
+                          _showCancelDialog(context, bookings[index].reference);
                         },
                         child: Text('Batalkan'),
                       ),
-                    if (status == 'Rejected')
+                    if (status == 'Rejected' && booking.containsKey('rejection_reason'))
                       Text('Alasan Ditolak: ${booking['rejection_reason']}'),
-                    if (status == 'Cancelled')
+                    if (status == 'Cancelled' && booking.containsKey('cancel_reason'))
                       Text('Alasan Dibatalkan: ${booking['cancel_reason']}'),
                   ],
                 ),
@@ -166,7 +169,7 @@ class Dashboard extends StatelessWidget {
                   // Update status menjadi Cancelled dan simpan alasan pembatalan
                   bookingRef.update({
                     'status': 'Cancelled',
-                    'cancel_reason': cancelReason, // Menggunakan rejection_reason untuk alasan penolakan atau pembatalan
+                    'cancel_reason': cancelReason, // Menggunakan cancel_reason untuk alasan pembatalan
                   }).then((value) {
                     Navigator.of(context).pop();
                   }).catchError((error) {

@@ -7,7 +7,7 @@ import 'package:ta/screen_guest/home_guest.dart';
 import 'package:ta/screen_user/home_user.dart';
 import 'package:ta/screen_verif/home_verif.dart';
 import 'package:ta/screen_admin/home_admin.dart';
-import 'package:ta/LoginAll.dart';  // Pastikan Anda memiliki file ini
+import 'package:ta/LoginAll.dart';  
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

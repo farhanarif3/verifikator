@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:ta/screen_verif/Jadwal.dart';
-import 'package:ta/screen_verif/Maintenance.dart';  // Periksa kembali nama file ini
+import 'package:ta/screen_verif/DataRuang.dart';
+import 'package:ta/screen_verif/Maintenance.dart'; // Ensure this is the correct file
 import 'package:ta/screen_verif/Dashboard.dart';
-import 'package:ta/screen_guest/home_guest.dart';  
+import 'package:ta/screen_guest/home_guest.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -13,21 +14,42 @@ class VerifPage extends StatefulWidget {
 
 class _VerifPageState extends State<VerifPage> {
   int _selectedIndex = 0;
+  late String _userBidang;
+  static List<Widget> _widgetOptions = [];
 
-  static List<Widget> _widgetOptions = <Widget>[
-    DashAdmin(),
-    Jadwal(),
-    Agenda(),  // Pastikan nama kelas ini sesuai
-  ];
+  late Future<DocumentSnapshot> _userData;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
-  
+  final TextEditingController _confirmPasswordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _userData = _fetchUserData();
+    _userData.then((userData) {
+      setState(() {
+        _userBidang = userData['bidang'];
+        _widgetOptions = <Widget>[
+          Dashboard(userBidang: _userBidang),
+          Jadwal(),
+          Agenda(),
+          DataRuang(), // Pastikan ini adalah widget yang benar
+        ];
+      });
+    });
+  }
+
+  Future<DocumentSnapshot> _fetchUserData() async {
+    User? user = _auth.currentUser;
+    if (user != null) {
+      return _firestore.collection('users').doc(user.uid).get();
+    }
+    throw Exception('User not logged in');
+  }
+
   void _onItemTapped(int index) {
-    print('Item tapped: $index');  // Debugging log
     setState(() {
       _selectedIndex = index;
     });
@@ -37,7 +59,7 @@ class _VerifPageState extends State<VerifPage> {
     await _auth.signOut();
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => HomeGuest()), // Arahkan ke HomeGuest
+      MaterialPageRoute(builder: (context) => HomeGuest()), // Navigate to HomeGuest
     );
   }
 
@@ -67,12 +89,10 @@ class _VerifPageState extends State<VerifPage> {
       },
     );
   }
-  
+
   void _showProfileDialog() async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      DocumentSnapshot userData =
-          await _firestore.collection('users').doc(user.uid).get();
+    try {
+      DocumentSnapshot userData = await _userData;
 
       showDialog(
         context: context,
@@ -107,6 +127,15 @@ class _VerifPageState extends State<VerifPage> {
                           ),
                         ),
                         obscureText: true,
+                        validator: (value) {
+                          RegExp regex = RegExp(r'^(?=.*?[A-Z])(?=.*?[0-9])(?=.*?[!@#\$&*~]).{8,}$');
+                          if (value == null || value.isEmpty) {
+                            return 'Password tidak boleh kosong';
+                          } else if (!regex.hasMatch(value)) {
+                            return 'Password harus minimal 8 karakter dan mengandung huruf kapital, angka, dan simbol';
+                          }
+                          return null;
+                        },
                       ),
                       TextFormField(
                         controller: _confirmPasswordController,
@@ -122,6 +151,14 @@ class _VerifPageState extends State<VerifPage> {
                           ),
                         ),
                         obscureText: true,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Konfirmasi password tidak boleh kosong';
+                          } else if (value != _passwordController.text) {
+                            return 'Password tidak cocok';
+                          }
+                          return null;
+                        },
                       ),
                     ],
                   ),
@@ -146,9 +183,11 @@ class _VerifPageState extends State<VerifPage> {
           );
         },
       );
-    } else {
-      // Handle the case where user is not logged in
-      print('User not logged in');
+    } catch (e) {
+      print('Error fetching user data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal memuat data pengguna')),
+      );
     }
   }
 
@@ -159,26 +198,26 @@ class _VerifPageState extends State<VerifPage> {
         if (_passwordController.text == _confirmPasswordController.text) {
           await user.updatePassword(_passwordController.text);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Password changed successfully')),
+            SnackBar(content: Text('Password berhasil diubah')),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Passwords do not match')),
+            SnackBar(content: Text('Password tidak cocok')),
           );
         }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to change password: $e')),
+        SnackBar(content: Text('Gagal mengubah password: $e')),
       );
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false, // Menyembunyikan tombol back
+        automaticallyImplyLeading: false, // Hide back button
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -205,7 +244,9 @@ class _VerifPageState extends State<VerifPage> {
         ],
       ),
       body: Center(
-        child: _widgetOptions.elementAt(_selectedIndex),
+        child: _widgetOptions.isEmpty
+            ? CircularProgressIndicator()
+            : _widgetOptions.elementAt(_selectedIndex),
       ),
       backgroundColor: Colors.grey[200],
       bottomNavigationBar: BottomNavigationBar(
@@ -224,6 +265,11 @@ class _VerifPageState extends State<VerifPage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.block),
             label: 'Maintenance',
+            backgroundColor: Colors.white,
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.add_home_work),
+            label: 'Kelola Ruang',
             backgroundColor: Colors.white,
           ),
         ],
